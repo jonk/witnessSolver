@@ -97,7 +97,6 @@ public class Puzzle {
         return children;
     }
 
-    /** Expects grid to be a square */
     private boolean isValid(Node n, Set<Node> visited) {
         return n.x >= 0 && n.x < grid[0].length &&
                 n.y >= 0 && n.y < grid.length &&
