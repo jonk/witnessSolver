@@ -1,6 +1,7 @@
 package com.jonk;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class Puzzle {
 
@@ -16,8 +17,10 @@ public class Puzzle {
         this.start = start;
     }
 
-    /** Expects grid to be a rectangle, all heights and widths match. 'S' denotes
-     * start, 'E' denotes end, '.' is empty space, '_' is missing space. */
+    /**
+     * Expects grid to be a rectangle, height and width is uniform across rows and cols. 'S' denotes
+     * start, 'E' denotes end, '.' is a valid space, '_' is an invalid space.
+     */
     public static Puzzle fromString(String input) {
         String[] rows = input.split("\n");
         int height = rows.length;
@@ -28,10 +31,13 @@ public class Puzzle {
             String row = rows[i];
             grid[i] = row.split(" ");
             for (int j = 0; j < grid[i].length; j++) {
-                if (grid[i][j].equals("S")) {
-                    start = new Node(i, j);
+                if (grid[i][j].contains("S")) {
+                    start = new Node(j, i);
                 }
             }
+        }
+        if (start == null) {
+            throw new IllegalArgumentException("Puzzle requires start point denoted by 'S'");
         }
         return new Puzzle(grid, start);
     }
@@ -40,19 +46,36 @@ public class Puzzle {
         if (solution == null) {
             solveBfs();
         }
-        for (int i = 1; i < solution.size(); i++) {
-            Node p = solution.get(i);
-            grid[p.y][p.x] = "x";
-        }
+
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < grid.length; i++) {
-            for (int j = 0; j < grid[i].length; j++) {
-                sb.append(grid[i][j]);
+        for (int row = 0; row < grid.length; row++) {
+            for (int col = 0; col < grid[row].length; col++) {
+                if (grid[row][col].contains("E")) {
+                    sb.append("E");
+                } else if (solution.contains(new Node(row, col))) {
+                    sb.append(directionSymbol(solution.indexOf(new Node(row, col))));
+                } else {
+                    sb.append(".");
+                }
                 sb.append(" ");
             }
             sb.append("\n");
         }
         System.out.println(sb.toString());
+    }
+
+    private String directionSymbol(int n) {
+        Node cur = solution.get(n);
+        Node prev = solution.get(n - 1);
+        if (cur.row < prev.row) {
+            return "v";
+        } else if (cur.row > prev.row) {
+            return "^";
+        } else if (cur.col > prev.col) {
+            return "<";
+        } else {
+            return ">";
+        }
     }
 
     private void solveBfs() {
@@ -62,8 +85,8 @@ public class Puzzle {
         while (!queue.isEmpty()) {
             Node cur = queue.poll();
             visited.add(cur);
-            if (grid[cur.y][cur.x].equals("E")) {
-                solution = getSolution(cur);
+            if (grid[cur.row][cur.col].contains("E")) {
+                solution = traverseParents(cur);
                 break;
             } else {
                 queue.addAll(findChildren(cur, visited));
@@ -71,59 +94,81 @@ public class Puzzle {
         }
     }
 
-    private List<Node> getSolution(Node cur) {
+    private List<Node> traverseParents(Node cur) {
         List<Node> path = new ArrayList<>();
         while (cur.parent != null) {
             path.add(cur);
             cur = cur.parent;
         }
+        path.add(cur); // For the start node
         return path;
     }
 
     private List<Node> findChildren(Node cur, Set<Node> visited) {
-        List<Node> children = new ArrayList<>();
-        int[] search = new int[]{-1, 1};
-        Node newX, newY;
-        for (int incr : search) {
-            newX = new Node(cur.x + incr, cur.y, cur);
-            if (isValid(newX, visited)) {
-                children.add(newX);
-            }
-            newY = new Node(cur.x, cur.y + incr, cur);
-            if (isValid(newY, visited)) {
-                children.add(newY);
-            }
-        }
-        return children;
+        Map<String, Node> exploreMap = initExploreMap(cur);
+        return exploreMap.entrySet()
+                .stream()
+                .filter(e -> this.isValid(e, visited))
+                .map(Map.Entry::getValue)
+                .collect(Collectors.toList());
     }
 
-    private boolean isValid(Node n, Set<Node> visited) {
-        return n.x >= 0 && n.x < grid[0].length &&
-                n.y >= 0 && n.y < grid.length &&
+    private Map<String, Node> initExploreMap(Node n) {
+        Map<String, Node> resultMap = new HashMap<>();
+        resultMap.put("<", new Node(n.row, n.col - 1, n));
+        resultMap.put(">", new Node(n.row, n.col + 1, n));
+        resultMap.put("^", new Node(n.row - 1, n.col, n));
+        resultMap.put("v", new Node(n.row + 1, n.col, n));
+        return resultMap;
+    }
+
+    private boolean isValid(Map.Entry<String, Node> e, Set<Node> visited) {
+        String key = e.getKey();
+        Node n = e.getValue();
+        return n.col >= 0 && n.col < grid[0].length &&
+                n.row >= 0 && n.row < grid.length &&
                 !visited.contains(n) &&
-                !grid[n.y][n.x].equals("_");
+                !grid[n.row][n.col].equals("_") &&
+                (grid[n.parent.row][n.parent.col].equals(".") || grid[n.parent.row][n.parent.col].contains(key));
     }
 
     private static class Node {
-        int x;
-        int y;
+        int row;
+        int col;
         Node parent;
 
-        public Node(int x, int y, Node parent) {
-            this.x = x;
-            this.y = y;
+        public Node(int row, int col, Node parent) {
+            this.row = row;
+            this.col = col;
             this.parent = parent;
         }
 
-        public Node(int x, int y) {
-            this.x = x;
-            this.y = y;
+        public Node(int row, int col) {
+            this.row = row;
+            this.col = col;
             this.parent = null;
         }
 
         @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            Node node = (Node) o;
+
+            return col == node.col && row == node.row;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = col;
+            result = 31 * result + row;
+            return result;
+        }
+
+        @Override
         public String toString() {
-            return String.format("(%d, %d)", this.x, this.y);
+            return String.format("(row: %d, col: %d)", this.row, this.col);
         }
     }
 }
