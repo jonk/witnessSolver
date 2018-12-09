@@ -32,7 +32,7 @@ public class Puzzle {
             grid[i] = row.split(" ");
             for (int j = 0; j < grid[i].length; j++) {
                 if (grid[i][j].contains("S")) {
-                    start = new Node(j, i);
+                    start = new Node(i, j);
                 }
             }
         }
@@ -52,6 +52,8 @@ public class Puzzle {
             for (int col = 0; col < grid[row].length; col++) {
                 if (grid[row][col].contains("E")) {
                     sb.append("E");
+                } else if (grid[row][col].contains("S")) {
+                    sb.append("S ");
                 } else if (solution.contains(new Node(row, col))) {
                     sb.append(directionSymbol(solution.indexOf(new Node(row, col))));
                 } else {
@@ -100,7 +102,6 @@ public class Puzzle {
             path.add(cur);
             cur = cur.parent;
         }
-        path.add(cur); // For the start node
         return path;
     }
 
